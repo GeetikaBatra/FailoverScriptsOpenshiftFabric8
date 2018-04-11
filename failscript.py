@@ -7,8 +7,8 @@ import time
 import sys
 
 def oc_scale(deployment):
-    subprocess.check_output("oc scale dc/{} --replicas=0".format(deployment),shell=True)
-    subprocess.check_output("oc scale dc/{} --replicas=1".format(deployment),shell=True)
+	subprocess.check_output("oc scale dc/{} --replicas=0".format(deployment),shell=True)
+	subprocess.check_output("oc scale dc/{} --replicas=1".format(deployment),shell=True)
 
 def request_stack_analyses():
 	manifest_files = {}
@@ -21,27 +21,39 @@ def request_stack_analyses():
 		sys.exit()
 	headers = { "Authorization" : auth_key}
 	data = {"filePath[]" : "/Users/gbatra/test/maven-multi-module-example-2"}
-
+	manifest_files = {"manifest[]": open( "/Users/gbatra/test/maven-multi-module-example-2/pom.xml", 'rb')}
 	req_data = requests.post(url, headers=headers, files=manifest_files, data=data)
-	import pdb
-	pdb.set_trace()
-	stack_id = req_data.get("id")
+	stack_id = req_data.json().get("id")
 	oc_scale("bayesian-api")
 
-	time.sleep(30)
+	status = 500
+	while status>=500:
+		
+		try:
+			time.sleep(10)
+			print(stack_id)
+			poll_stack = requests.get(url + "/" + stack_id, headers=headers)
+			print(poll_stack)
+			status = poll_stack.status_code	
+		except Exception:
+			status = 500
+			continue
+
 	count = 1
 	while True:
 		if stack_id is not None:
-			poll_stack = requests.get(url + "/" + stack_id)
-			if poll_stack.status==202:
+			poll_stack = requests.get(url + "/" + stack_id, headers=headers)
+			if poll_stack.status_code==202:
 				time.sleep(10)
 				count = count + 1
 			if count>=5:
 				print("Analyses still in progress")
 				break
-			else:
+			if  poll_stack.status_code>=500:
+				raise ValueError('Internal Server Error')
+			elif(poll_stack.status_code==200):
 				print("Analyses finished")
-				print(poll_data.json)
+				print(poll_stack.json)
 				break
 
 
